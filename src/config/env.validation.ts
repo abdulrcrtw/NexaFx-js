@@ -357,6 +357,14 @@ export const envSchema = z.object({
     .transform(Number)
     .pipe(z.number().int().positive())
     .default(() => 30),
+  // KYC document storage
+  // ============================================
+  KYC_STORAGE_HOST: z.string().optional(),
+
+  // ============================================
+  // Stellar asset issuers (comma-separated CODE:GADDRESS pairs)
+  // ============================================
+  STELLAR_ASSET_ISSUERS: z.string().optional(),
   // Auth Rate Limiting
   // ============================================
   THROTTLE_AUTH_LIMIT: z
