@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -23,6 +24,8 @@ export interface CreateWebhookEndpointDto {
   events: string[];
 }
 
+const MAX_ENDPOINTS_PER_USER =
+  parseInt(process.env.WEBHOOK_MAX_ENDPOINTS_PER_USER ?? '10', 10) || 10;
 const PRIVATE_CIDR_RANGES = [
   { start: ip2int('10.0.0.0'), end: ip2int('10.255.255.255') },
   { start: ip2int('172.16.0.0'), end: ip2int('172.31.255.255') },
@@ -105,6 +108,14 @@ export class WebhooksService {
   async createEndpoint(
     dto: CreateWebhookEndpointDto,
   ): Promise<WebhookEndpoint> {
+    const activeCount = await this.endpointsRepository.count({
+      where: { ownerId: dto.ownerId, isActive: true },
+    });
+    if (activeCount >= MAX_ENDPOINTS_PER_USER) {
+      throw new ConflictException(
+        `Maximum of ${MAX_ENDPOINTS_PER_USER} active webhook endpoints per user reached`,
+      );
+    }
     await validateWebhookUrl(dto.url);
 
     const endpoint = this.endpointsRepository.create({
@@ -171,9 +182,7 @@ export class WebhooksService {
 
       await this.webhooksQueue.add(
         'deliver',
-        {
-          deliveryId: delivery.id,
-        },
+        { deliveryId: delivery.id },
         {
           jobId: delivery.id,
           attempts: Number(process.env.WEBHOOK_MAX_ATTEMPTS || '5'),
