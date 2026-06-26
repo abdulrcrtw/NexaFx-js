@@ -72,4 +72,14 @@ export class UsersService {
     const { passwordHash: _, ...safe } = user;
     return safe;
   }
+
+  async deleteUser(id: string): Promise<void> {
+    const user = await this.findById(id);
+    const uuid = crypto.randomUUID();
+    user.email = `deleted_${uuid}@deleted.invalid`;
+    user.firstName = '[deleted]';
+    user.lastName = '[deleted]';
+    await this.usersRepository.save(user);
+    await this.usersRepository.softDelete(id);
+  }
 }
