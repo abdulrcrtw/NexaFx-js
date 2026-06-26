@@ -15,4 +15,3 @@ export const AppDataSource = new DataSource({
   migrationsTableName: 'typeorm_migrations',
 });
 
-export default AppDataSource;

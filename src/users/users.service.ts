@@ -61,6 +61,13 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
+  async updatePassword(id: string, newPasswordHash: string): Promise<void> {
+    const user = await this.findById(id);
+    user.passwordHash = newPasswordHash;
+    user.passwordChangedAt = new Date();
+    await this.usersRepository.save(user);
+  }
+
   sanitize(user: User): Omit<User, 'passwordHash'> {
     const { passwordHash: _, ...safe } = user;
     return safe;
