@@ -3,6 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import Big from 'big.js';
 import { withTransaction } from '../common/helpers/with-transaction.helper';
+import {
+  normalizeCurrencyCode,
+  isSupportedCurrency,
+} from '../currencies/supported-currencies';
 import { WalletBalanceEntity } from './wallet-balance.entity';
 import { WalletBalance } from './wallets.types';
 import {
@@ -29,6 +33,7 @@ export class WalletsService {
       return this.getBalance(accountId, normalizedCurrency);
     }
 
+    const driverType = this.dataSource.options?.type;
     const driverType = this.dataSource.options.type;
 
     return withTransaction(this.dataSource, async (manager) => {
@@ -45,6 +50,7 @@ export class WalletsService {
         });
       }
 
+      const newBalance = Number(new Big(wallet.balance).plus(new Big(delta)).toFixed(2));
       const newBalance = Number(
         new Big(wallet.balance).plus(new Big(delta)).toFixed(8),
         new Big(wallet.balance).plus(new Big(delta)).toFixed(2),
