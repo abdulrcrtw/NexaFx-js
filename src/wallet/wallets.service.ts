@@ -29,6 +29,8 @@ export class WalletsService {
       return this.getBalance(accountId, normalizedCurrency);
     }
 
+    const driverType = this.dataSource.options.type;
+
     return withTransaction(this.dataSource, async (manager) => {
       let wallet = await manager.findOne(WalletBalanceEntity, {
         where: { accountId, currency: normalizedCurrency },

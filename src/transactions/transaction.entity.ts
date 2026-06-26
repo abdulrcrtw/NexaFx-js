@@ -67,6 +67,7 @@ export class Transaction {
 
   @Column({ type: 'timestamp', nullable: true })
   reversedAt!: Date | null;
+  pendingTimeoutAt: Date | null;
 
   @Column({ type: 'timestamp', nullable: true })
   pendingTimeoutAt!: Date | null;
