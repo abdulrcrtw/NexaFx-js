@@ -21,6 +21,8 @@ export enum TransactionStatus {
 @Index(['senderId'])
 @Index(['receiverId'])
 @Index(['createdAt'])
+@Index(['txHash'])
+@Index(['senderId', 'status'])
 export class Transaction {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -67,11 +69,9 @@ export class Transaction {
 
   @Column({ type: 'timestamp', nullable: true })
   reversedAt!: Date | null;
-  pendingTimeoutAt: Date | null;
 
   @Column({ type: 'timestamp', nullable: true })
   pendingTimeoutAt!: Date | null;
-  pendingTimeoutAt: Date | null;
 
   @Column({ type: 'uuid', nullable: true })
   reversedBy!: string | null;
