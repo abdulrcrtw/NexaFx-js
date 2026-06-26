@@ -1,6 +1,11 @@
 import { BullModule } from '@nestjs/bull';
 import { CacheModule } from '@nestjs/cache-manager';
-import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
@@ -26,6 +31,9 @@ import { UsersModule } from './users/users.module';
 import { WalletsModule } from './wallet/wallets.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { ScheduledJobsModule } from './scheduled-jobs/scheduled-jobs.module';
+import { DisputesModule } from './disputes/disputes.module';
+import { MetricsModule } from './metrics/metrics.module';
+import { StellarModule } from './stellar/stellar.module';
 
 const enableBull =
   process.env.NODE_ENV !== 'test' && process.env.DISABLE_BULL !== 'true';
@@ -84,7 +92,8 @@ async function createCacheOptions(configService: ConfigService<Configuration>) {
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService<Configuration>) => {
-        const database = configService.get<Configuration['database']>('database');
+        const database =
+          configService.get<Configuration['database']>('database');
 
         if (process.env.NODE_ENV === 'test') {
           return {
@@ -178,6 +187,9 @@ async function createCacheOptions(configService: ConfigService<Configuration>) {
     AuthModule,
     ReconciliationModule,
     ScheduledJobsModule,
+    DisputesModule,
+    MetricsModule,
+    StellarModule,
   ],
   controllers: [AppController],
   providers: [

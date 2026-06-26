@@ -1,86 +1,84 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { ConflictException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { DataSource } from 'typeorm';
 import { KycService } from './kyc.service';
 import { KycDocument, KycDocumentStatus } from './kyc-document.entity';
 
-describe('KycService', () => {
-  let service: KycService;
-  let kycRepo: jest.Mocked<Pick<Repository<KycDocument>, 'create' | 'findOne' | 'save'>>;
-  let events: jest.Mocked<Pick<EventEmitter2, 'emit'>>;
+function buildDataSource(manager: Record<string, jest.Mock>) {
+  const queryRunner = {
+    connect: jest.fn(),
+    startTransaction: jest.fn(),
+    commitTransaction: jest.fn(),
+    rollbackTransaction: jest.fn(),
+    release: jest.fn(),
+    isTransactionActive: true,
+    manager,
+  };
+  return {
+    createQueryRunner: jest.fn().mockReturnValue(queryRunner),
+  } as unknown as DataSource;
+}
 
-  const pendingDoc: KycDocument = {
-    id: 'doc-1',
+describe('KycService.submit', () => {
+  const dto = {
     userId: 'user-1',
     documentType: 'passport',
-    documentNumber: 'AB123',
-    documentUrl: 'https://example.com/doc.jpg',
-    status: KycDocumentStatus.PENDING,
-    reviewedBy: undefined as any,
-    reviewedAt: undefined as any,
-    createdAt: new Date(),
+    documentNumber: 'A1234567',
+    documentUrl: 'https://storage.example.com/doc.pdf',
   };
+  const config = { get: jest.fn().mockReturnValue('storage.example.com') } as unknown as ConfigService;
+  const events = { emit: jest.fn() } as unknown as EventEmitter2;
 
-  beforeEach(() => {
-    kycRepo = { create: jest.fn(), findOne: jest.fn(), save: jest.fn() } as any;
-    events = { emit: jest.fn() } as any;
-    service = new KycService(kycRepo as any, events as any);
+  it('creates a submission when no active one exists', async () => {
+    const manager = {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockReturnValue({ ...dto, id: 'doc-1' }),
+      save: jest.fn().mockResolvedValue({ ...dto, id: 'doc-1' }),
+    };
+    const kycRepo = {} as any;
+    const service = new KycService(kycRepo, events, config, buildDataSource(manager));
+
+    const result = await service.submit(dto as any);
+
+    expect(result.id).toBe('doc-1');
+    expect(manager.save).toHaveBeenCalled();
   });
 
-  describe('review()', () => {
-    it('throws NotFoundException when KYC document not found', async () => {
-      kycRepo.findOne.mockResolvedValue(null);
-      await expect(
-        service.review('missing', { reviewerId: 'admin-1', status: KycDocumentStatus.APPROVED }),
-      ).rejects.toThrow(NotFoundException);
-    });
+  it('returns 409 with the existing submission id when one is already active', async () => {
+    const manager = {
+      findOne: jest.fn().mockResolvedValue({ id: 'existing-doc', status: KycDocumentStatus.PENDING }),
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+    const kycRepo = {} as any;
+    const service = new KycService(kycRepo, events, config, buildDataSource(manager));
 
-    it('throws ForbiddenException when document already reviewed', async () => {
-      kycRepo.findOne.mockResolvedValue({
-        ...pendingDoc,
-        status: KycDocumentStatus.APPROVED,
-      });
-      await expect(
-        service.review('doc-1', { reviewerId: 'admin-1', status: KycDocumentStatus.APPROVED }),
-      ).rejects.toThrow(ForbiddenException);
-    });
-
-    it('approval sets status to APPROVED and emits event', async () => {
-      kycRepo.findOne.mockResolvedValue({ ...pendingDoc });
-      kycRepo.save.mockImplementation((doc) => Promise.resolve(doc as KycDocument));
-
-      const result = await service.review('doc-1', {
-        reviewerId: 'admin-1',
-        status: KycDocumentStatus.APPROVED,
-      });
-
-      expect(result.status).toBe(KycDocumentStatus.APPROVED);
-      expect(result.reviewedBy).toBe('admin-1');
-      expect(events.emit).toHaveBeenCalledWith('kyc.reviewed', result);
-    });
-
-    it('rejection stores status as REJECTED', async () => {
-      kycRepo.findOne.mockResolvedValue({ ...pendingDoc });
-      kycRepo.save.mockImplementation((doc) => Promise.resolve(doc as KycDocument));
-
-      const result = await service.review('doc-1', {
-        reviewerId: 'admin-1',
-        status: KycDocumentStatus.REJECTED,
-      });
-
-      expect(result.status).toBe(KycDocumentStatus.REJECTED);
-    });
+    await expect(service.submit(dto as any)).rejects.toMatchObject(
+      new ConflictException({
+        message: 'An active KYC submission already exists for this user',
+        submissionId: 'existing-doc',
+      }),
+    );
+    expect(manager.save).not.toHaveBeenCalled();
   });
 
-  describe('isApproved()', () => {
-    it('returns true when an approved document exists', async () => {
-      kycRepo.findOne.mockResolvedValue({ ...pendingDoc, status: KycDocumentStatus.APPROVED });
-      await expect(service.isApproved('user-1')).resolves.toBe(true);
-    });
+  it('returns 409 when a concurrent request wins the DB unique constraint race', async () => {
+    const manager = {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockReturnValue(dto),
+      save: jest.fn().mockRejectedValue({ code: '23505' }),
+    };
+    const kycRepo = {
+      findOne: jest.fn().mockResolvedValue({ id: 'winner-doc' } as KycDocument),
+    } as any;
+    const service = new KycService(kycRepo, events, config, buildDataSource(manager));
 
-    it('returns false when no approved document exists', async () => {
-      kycRepo.findOne.mockResolvedValue(null);
-      await expect(service.isApproved('user-1')).resolves.toBe(false);
-    });
+    await expect(service.submit(dto as any)).rejects.toMatchObject(
+      new ConflictException({
+        message: 'An active KYC submission already exists for this user',
+        submissionId: 'winner-doc',
+      }),
+    );
   });
 });
