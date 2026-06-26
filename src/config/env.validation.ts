@@ -324,6 +324,11 @@ export const envSchema = z.object({
   EXCHANGE_RATE_HOST_API_KEY: z.string().optional(),
 
   // ============================================
+  // Backup Configuration
+  // ============================================
+  BACKUP_ALERT_EMAIL: z.string().email().optional(),
+
+  // ============================================
   // Wallet Encryption Key (64-char hex, required)
   // ============================================
   WALLET_ENCRYPTION_KEY: z

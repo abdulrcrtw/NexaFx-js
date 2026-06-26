@@ -11,9 +11,11 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { ApiOperation } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { join, resolve, normalize } from 'path';
 import { AdminService } from './admin.service';
+import { BackupVerificationService } from './backup-verification.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminRoleGuard } from '../common/guards/admin-role.guard';
 import { IpAllowlistGuard } from '../common/guards/ip-allowlist.guard';
@@ -40,14 +42,17 @@ interface AuthenticatedRequest extends Request {
 function assertSafePathSegment(segment: string, paramName: string): void {
   if (/[/\\]/.test(segment) || segment.includes('..')) {
     throw new BadRequestException(
-      `Invalid path segment in ${paramName} — traversal sequences are not permitted`,
+      `Invalid path segment in ${paramName} ï¿½ traversal sequences are not permitted`,
     );
   }
 }
 
 @Controller('api/v1/admin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly backupVerificationService: BackupVerificationService,
+  ) {}
 
   @UseGuards(JwtAuthGuard, AdminRoleGuard, IpAllowlistGuard)
   @UseInterceptors(CacheInterceptor)
@@ -101,6 +106,13 @@ export class AdminController {
       req.user.id,
       dto.reason,
     );
+  }
+
+  @UseGuards(JwtAuthGuard, AdminRoleGuard, IpAllowlistGuard)
+  @Get('system/backup-status')
+  @ApiOperation({ summary: 'Get backup status (super admin only)' })
+  getBackupStatus() {
+    return this.backupVerificationService.getStatus();
   }
 
   @UseGuards(JwtAuthGuard, AdminRoleGuard, IpAllowlistGuard)
